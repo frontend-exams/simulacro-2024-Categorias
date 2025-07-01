@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Image, Platform, Pressable, ScrollView, StyleSheet, View, Switch } from 'react-native'
 import * as ExpoImagePicker from 'expo-image-picker'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as yup from 'yup'
@@ -19,7 +19,7 @@ export default function CreateRestaurantScreen ({ navigation }) {
   const [restaurantCategories, setRestaurantCategories] = useState([])
   const [backendErrors, setBackendErrors] = useState()
 
-  const initialRestaurantValues = { name: null, description: null, address: null, postalCode: null, url: null, shippingCosts: null, email: null, phone: null, restaurantCategoryId: null }
+  const initialRestaurantValues = { name: null, description: null, address: null, postalCode: null, url: null, shippingCosts: null, email: null, phone: null, restaurantCategoryId: null, promoted: false }
   const validationSchema = yup.object().shape({
     name: yup
       .string()
@@ -115,7 +115,7 @@ export default function CreateRestaurantScreen ({ navigation }) {
         titleStyle: GlobalStyles.flashTextStyle
       })
       navigation.navigate('RestaurantsScreen', { dirty: true })
-    } catch (error) {
+    } catch (error) { // backendErrors básicamente se inicializa con los errores del backend que se han conseguido en el catch.
       console.log(error)
       setBackendErrors(error.errors)
     }
@@ -203,10 +203,23 @@ export default function CreateRestaurantScreen ({ navigation }) {
                 <TextRegular>Hero image: </TextRegular>
                 <Image style={styles.image} source={values.heroImage ? { uri: values.heroImage.assets[0].uri } : restaurantBackground} />
               </Pressable>
+              {/* Solución con Switch de promoted */}
+              <TextRegular>Is it promoted?: </TextRegular>
+              <Switch
+                trackColor={{ false: GlobalStyles.brandSecondary, true: GlobalStyles.brandPrimary }}
+                thumbColor={values.promoted ? GlobalStyles.brandSecondary : '#f4f3f4'}
+                // onValueChange={toggleSwitch}
+                value={values.promoted} // Esto al principio debe devolver false
+                style={styles.switch}
+                onValueChange={value => // value es true o false depende de como se haya tocado el switch
+                  setFieldValue('promoted', value) // Asigna a promoted false o true depende del switch
+                }
+              />
+              <ErrorMessage name={'promoted'} render={msg => <TextError>{msg}</TextError> }/>
 
               {backendErrors &&
                 backendErrors.map((error, index) => <TextError key={index}>{error.param}-{error.msg}</TextError>)
-              }
+              } {/* Si hay algún error del backend, como que ya existen otros restaurantes promocionados, se mostrarán dichos errores del backend */}
 
               <Pressable
                 onPress={handleSubmit}
@@ -259,6 +272,9 @@ const styles = StyleSheet.create({
     height: 100,
     borderWidth: 1,
     alignSelf: 'center',
+    marginTop: 5
+  },
+  switch: {
     marginTop: 5
   }
 })

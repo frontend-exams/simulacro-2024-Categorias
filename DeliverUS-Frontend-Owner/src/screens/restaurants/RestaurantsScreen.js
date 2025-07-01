@@ -2,7 +2,7 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { StyleSheet, FlatList, Pressable, View } from 'react-native'
 
-import { getAll, remove } from '../../api/RestaurantEndpoints'
+import { getAll, remove, promote } from '../../api/RestaurantEndpoints'
 import ImageCard from '../../components/ImageCard'
 import TextSemiBold from '../../components/TextSemibold'
 import TextRegular from '../../components/TextRegular'
@@ -12,10 +12,12 @@ import { AuthorizationContext } from '../../context/AuthorizationContext'
 import { showMessage } from 'react-native-flash-message'
 import DeleteModal from '../../components/DeleteModal'
 import restaurantLogo from '../../../assets/restaurantLogo.jpeg'
-
+import ConfirmationModal from '../../components/ConfirmationModal'
 export default function RestaurantsScreen ({ navigation, route }) {
   const [restaurants, setRestaurants] = useState([])
   const [restaurantToBeDeleted, setRestaurantToBeDeleted] = useState(null)
+  const [restaurantToBePromoted, setRestaurantToBePromoted] = useState(null)
+  const [backendErrors, setBackendErrors] = useState([])
   const { loggedInUser } = useContext(AuthorizationContext)
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function RestaurantsScreen ({ navigation, route }) {
   }, [loggedInUser, route])
 
   const renderRestaurant = ({ item }) => {
+    console.log('Restaurant item:', item)
     return (
       <ImageCard
         imageUri={item.logo ? { uri: process.env.API_BASE_URL + '/' + item.logo } : restaurantLogo}
@@ -39,7 +42,11 @@ export default function RestaurantsScreen ({ navigation, route }) {
         {item.averageServiceMinutes !== null &&
           <TextSemiBold>Avg. service time: <TextSemiBold textStyle={{ color: GlobalStyles.brandPrimary }}>{item.averageServiceMinutes} min.</TextSemiBold></TextSemiBold>
         }
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <TextSemiBold>Shipping: <TextSemiBold textStyle={{ color: GlobalStyles.brandPrimary }}>{item.shippingCosts.toFixed(2)}€</TextSemiBold></TextSemiBold>
+        {/* A partir de aquí mostramos lo de la promoció */}
+        {item.promoted && (<TextRegular textStyle={styles.promotedText}>¡En promoción!</TextRegular>)}
+        </View>
         <View style={styles.actionButtonsContainer}>
           <Pressable
             onPress={() => navigation.navigate('EditRestaurantScreen', { id: item.id })
@@ -74,6 +81,25 @@ export default function RestaurantsScreen ({ navigation, route }) {
             <MaterialCommunityIcons name='delete' color={'white'} size={20}/>
             <TextRegular textStyle={styles.text}>
               Delete
+            </TextRegular>
+          </View>
+        </Pressable>
+
+        {/* Botón de Promote */}
+        <Pressable
+            onPress={() => { setRestaurantToBePromoted(item) }}
+            style={({ pressed }) => [
+              {
+                backgroundColor: pressed
+                  ? GlobalStyles.brandSuccess
+                  : GlobalStyles.brandSuccessTap
+              },
+              styles.actionButton
+            ]}>
+          <View style={[{ flex: 1, flexDirection: 'row', justifyContent: 'center' }]}>
+            <MaterialCommunityIcons name='chat-alert' color={'white'} size={20}/>
+            <TextRegular textStyle={styles.text}>
+              Promote
             </TextRegular>
           </View>
         </Pressable>
@@ -119,7 +145,13 @@ export default function RestaurantsScreen ({ navigation, route }) {
   const fetchRestaurants = async () => {
     try {
       const fetchedRestaurants = await getAll()
-      setRestaurants(fetchedRestaurants)
+      // Ordenamos los restaurantes para que se muestre primero los que están con promoción
+      // Los que tienen promoted = true van primero
+      const sortedRestaurants = fetchedRestaurants.sort((a, b) => {
+        return (b.promoted === true) - (a.promoted === true)
+      })
+
+      setRestaurants(sortedRestaurants)
     } catch (error) {
       showMessage({
         message: `There was an error while retrieving restaurants. ${error} `,
@@ -153,8 +185,40 @@ export default function RestaurantsScreen ({ navigation, route }) {
     }
   }
 
+  const promoteRestaurant = async (restaurant) => {
+    setBackendErrors([])
+    try {
+      await promote(restaurant.id)
+      await fetchRestaurants() // Actualizamos la lista de restaurantes para que aparezcan ya los restaurantes promocionados
+      setRestaurantToBePromoted(null) // Hacemos desaparecer el modal
+      showMessage({
+        message: `Restaurant ${restaurant.name} succesfully promoted`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    } catch (error) {
+      console.log(error)
+      setRestaurantToBePromoted(null) // Cerramos el modal
+      setBackendErrors(error.errors)
+      showMessage({
+        message: `Restaurant ${restaurant.name} could not be promoted.`,
+        type: 'error',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    }
+  }
+
   return (
     <>
+    {backendErrors && backendErrors.length > 0 && (
+  <View style={styles.errorBox}>
+    {backendErrors.map((e, index) => (
+      <TextRegular key={index} textStyle={styles.errorText}>{e}</TextRegular>
+    ))}
+  </View>
+    )}
     <FlatList
       style={styles.container}
       data={restaurants}
@@ -170,6 +234,14 @@ export default function RestaurantsScreen ({ navigation, route }) {
         <TextRegular>The products of this restaurant will be deleted as well</TextRegular>
         <TextRegular>If the restaurant has orders, it cannot be deleted.</TextRegular>
     </DeleteModal>
+    <ConfirmationModal
+      isVisible={restaurantToBePromoted !== null}
+      onCancel={() => setRestaurantToBePromoted(null)}
+      onConfirm={() => promoteRestaurant(restaurantToBePromoted)}
+    >
+      <TextRegular>Other promoted restaurant, if any, will be unpromoted</TextRegular>
+
+    </ConfirmationModal>
     </>
   )
 }
@@ -195,13 +267,17 @@ const styles = StyleSheet.create({
     padding: 10,
     alignSelf: 'center',
     flexDirection: 'column',
-    width: '50%'
+    // width: '50%'
+    minWidth: '28%',
+    maxWidth: '32%',
+    flexBasis: '30%'
   },
   actionButtonsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     bottom: 5,
     position: 'absolute',
-    width: '90%'
+    width: '100%'
   },
   text: {
     fontSize: 16,
@@ -212,5 +288,26 @@ const styles = StyleSheet.create({
   emptyList: {
     textAlign: 'center',
     padding: 50
+  },
+  promotedText: {
+    color: GlobalStyles.brandPrimary,
+    borderWidth: 3,
+    borderColor: GlobalStyles.brandSuccess,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+
+  },
+  errorContainer: {
+    padding: 10,
+    backgroundColor: '#ffe6e6',
+    borderColor: 'red',
+    borderWidth: 1,
+    borderRadius: 5,
+    margin: 10
+  },
+  errorText: {
+    color: 'red',
+    textAlign: 'center'
   }
 })
