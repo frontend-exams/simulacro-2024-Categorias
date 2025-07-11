@@ -9,7 +9,7 @@ const checkBussinessRuleOneRestaurantPromotedByOwner = async (ownerId, promotedV
   if (promotedValue) {
     try {
       const promotedRestaurants = await Restaurant.findAll({ where: { userId: ownerId, promoted: true } })
-      if (promotedRestaurants.length !== 0) {
+      if (promotedRestaurants.length !== 0) { // Si ya hay más restaurantes promocionados, salta el error
         return Promise.reject(new Error('You can only promote one restaurant at a time'))
       }
     } catch (err) {

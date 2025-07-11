@@ -2,7 +2,7 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { StyleSheet, FlatList, Pressable, View } from 'react-native'
 
-import { getAll, remove } from '../../api/RestaurantEndpoints'
+import { getAll, remove, promote } from '../../api/RestaurantEndpoints'
 import ImageCard from '../../components/ImageCard'
 import TextSemiBold from '../../components/TextSemibold'
 import TextRegular from '../../components/TextRegular'
@@ -12,12 +12,14 @@ import { AuthorizationContext } from '../../context/AuthorizationContext'
 import { showMessage } from 'react-native-flash-message'
 import DeleteModal from '../../components/DeleteModal'
 import restaurantLogo from '../../../assets/restaurantLogo.jpeg'
+import ConfirmationModal from '../../components/ConfirmationModal'
 
 export default function RestaurantsScreen ({ navigation, route }) {
   const [restaurants, setRestaurants] = useState([])
   const [restaurantToBeDeleted, setRestaurantToBeDeleted] = useState(null)
   const { loggedInUser } = useContext(AuthorizationContext)
-
+  // Solución: useState para mostrar el modal
+  const [restaurantToBePromoted, setRestaurantToBePromoted] = useState(null)
   useEffect(() => {
     if (loggedInUser) {
       fetchRestaurants()
@@ -39,7 +41,13 @@ export default function RestaurantsScreen ({ navigation, route }) {
         {item.averageServiceMinutes !== null &&
           <TextSemiBold>Avg. service time: <TextSemiBold textStyle={{ color: GlobalStyles.brandPrimary }}>{item.averageServiceMinutes} min.</TextSemiBold></TextSemiBold>
         }
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <TextSemiBold>Shipping: <TextSemiBold textStyle={{ color: GlobalStyles.brandPrimary }}>{item.shippingCosts.toFixed(2)}€</TextSemiBold></TextSemiBold>
+        { item.promoted && (
+          <TextRegular style={styles.promoteText}>¡En promoción!</TextRegular>
+        )
+        }
+        </View>
         <View style={styles.actionButtonsContainer}>
           <Pressable
             onPress={() => navigation.navigate('EditRestaurantScreen', { id: item.id })
@@ -74,6 +82,24 @@ export default function RestaurantsScreen ({ navigation, route }) {
             <MaterialCommunityIcons name='delete' color={'white'} size={20}/>
             <TextRegular textStyle={styles.text}>
               Delete
+            </TextRegular>
+          </View>
+        </Pressable>
+        {/* Solución */}
+        <Pressable
+            onPress={() => { setRestaurantToBePromoted(item) }}
+            style={({ pressed }) => [
+              {
+                backgroundColor: pressed
+                  ? GlobalStyles.brandSuccessTap
+                  : GlobalStyles.brandSuccess
+              },
+              styles.actionButton
+            ]}>
+          <View style={[{ flex: 1, flexDirection: 'row', justifyContent: 'center' }]}>
+            <MaterialCommunityIcons name='alert-decagram' color={'white'} size={20}/>
+            <TextRegular textStyle={styles.text}>
+              Promote
             </TextRegular>
           </View>
         </Pressable>
@@ -115,6 +141,32 @@ export default function RestaurantsScreen ({ navigation, route }) {
     }
     </>
     )
+  }
+  // Solución: Función que promociona un restaurante
+  const promoteRestaurant = async (item) => {
+    // Siempre que hay una función asíncrona que llame a los endpoints hacemos try-catch
+    try {
+      // Actualizamos ----> No hace falta asignar a ninguna variable
+      await promote(item.id)
+      // Hacemos un fetch de nuevo de todos los restaurantes para que se muestre el restaurante actualizado
+      await fetchRestaurants() // Aquí si se pone el await y no olvidar los dos paréntesis ---> Al hacer el fetch vemos que primero se muestran los promoted
+      // Hacemos NO visible el modal
+      setRestaurantToBePromoted(null)
+      // Mostramos un mensaje de success
+      showMessage({
+        message: `Restaurant ${item.name} succesfully promoted`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    } catch (error) {
+      showMessage({
+        message: `There was an error while promoting restaurants. ${error} `,
+        type: 'error',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    }
   }
   const fetchRestaurants = async () => {
     try {
@@ -170,6 +222,13 @@ export default function RestaurantsScreen ({ navigation, route }) {
         <TextRegular>The products of this restaurant will be deleted as well</TextRegular>
         <TextRegular>If the restaurant has orders, it cannot be deleted.</TextRegular>
     </DeleteModal>
+    {/* Prueba */}
+    <ConfirmationModal
+      isVisible={restaurantToBePromoted !== null}
+      onCancel={() => setRestaurantToBePromoted(null)}
+      onConfirm={() => promoteRestaurant(restaurantToBePromoted)}>
+        <TextRegular>Other promoted restaurant, if any, will be unpromoted</TextRegular>
+    </ConfirmationModal>
     </>
   )
 }
@@ -195,7 +254,7 @@ const styles = StyleSheet.create({
     padding: 10,
     alignSelf: 'center',
     flexDirection: 'column',
-    width: '50%'
+    width: '33%' // Cuando hay 3 botones poner el 33% de width
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -212,5 +271,14 @@ const styles = StyleSheet.create({
   emptyList: {
     textAlign: 'center',
     padding: 50
+  },
+  promoteText: {
+    color: GlobalStyles.brandPrimary,
+    borderRadius: 20,
+    borderColor: GlobalStyles.brandSuccess,
+    // OJO ---> Para que el borde se muestre es necesario usar borderWidth
+    borderWidth: 3, // Sin esto no se muestra el borde
+    textAlign: 'center',
+    paddingHorizontal: 10 // Esto va a hacer que las letras no interfieran con el border
   }
 })

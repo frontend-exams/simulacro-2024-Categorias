@@ -105,13 +105,13 @@ const promote = async function (req, res) {
   try {
     const existingPromotedRestaurant = await Restaurant.findOne({ where: { userId: req.user.id, promoted: true } })
     if (existingPromotedRestaurant) {
-      await Restaurant.update(
+      await Restaurant.update( // Si ya había un restaurante promocionado lo pone a falso
         { promoted: false },
         { where: { id: existingPromotedRestaurant.id } },
         { transaction: t }
       )
     }
-    await Restaurant.update(
+    await Restaurant.update( // Pone a true el restaurante que se le está pasando en la req
       { promoted: true },
       { where: { id: req.params.restaurantId } },
       { transaction: t }
