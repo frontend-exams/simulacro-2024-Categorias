@@ -1,4 +1,4 @@
-import { get, post, put, destroy } from './helpers/ApiRequestsHelper'
+import { get, post, put, destroy, patch } from './helpers/ApiRequestsHelper'
 function getAll () {
   return get('users/myrestaurants')
 }
@@ -23,4 +23,8 @@ function remove (id) {
   return destroy(`restaurants/${id}`)
 }
 
-export { getAll, getDetail, getRestaurantCategories, create, update, remove }
+function promote (id) {
+  return patch(`restaurants/${id}/promote`) // Ponemos patch porque es lo mismo que había en el RestaurantRoutes
+}
+
+export { getAll, getDetail, getRestaurantCategories, create, update, remove, promote }
